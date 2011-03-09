@@ -37,7 +37,7 @@ Per-tab active command is supported to allow resuming long-running commands, lik
 
 To use in your crontab -- and I have no clue why this works -- prepend the command with ``DISPLAY=:0.0``:
 
-    * * * * * DISPLAY=:0.0 ysess -o ~/yakuake.ini --force-overwrite
+    \* \* \* \* \* DISPLAY=:0.0 ysess -o ~/yakuake.ini --force-overwrite
 
 In the future...
 ================
