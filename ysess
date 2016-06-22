@@ -1,11 +1,14 @@
 #!/usr/bin/env python
 
 import subprocess as sp, os, math, sys, re
+import subprocess
+import time
 from ConfigParser import ConfigParser
 from cStringIO import StringIO
 from optparse import OptionParser
 
 DBUS = 'qdbus org.kde.yakuake '
+YAKUAKE_DEFAULT_NEW_SESSIONS_OPENED = 1
 
 class SortedDict(dict):
     def __init__(self, *args, **kwargs):
@@ -50,8 +53,10 @@ def get_stdout(cmd, **opts):
     proc = sp.Popen(cmd, **opts)
     return proc.communicate()[0].strip()
 
+
 def get_yakuake(cmd):
     return get_stdout(DBUS + cmd)
+
 
 def get_sessions():
     tabs = []
@@ -61,20 +66,32 @@ def get_sessions():
     sessions = sorted(int(i) for i in get_yakuake('/yakuake/sessions sessionIdList').split(','))
     ksessions = sorted(int(line.split('/')[-1]) for line in get_yakuake('').split('\n') if '/Sessions/' in line)
     session_map = dict(zip(sessions, ksessions))
+    last_tabid = None
 
-    for i in range(sessnum):
-        sessid = int(get_yakuake('/yakuake/tabs sessionAtTab %d' % i))
-        ksess = '/Sessions/%d' % session_map[sessid]
+    for ksession in ksessions:
+        tabid = int(get_yakuake('/yakuake/sessions sessionIdForTerminalId %d' % (ksession - 1)))
+        if tabid == last_tabid:
+            split = 'true'
+        else:
+            split = None
+        last_tabid = tabid
+        sessid = int(get_yakuake('/yakuake/tabs sessionAtTab %d' % tabid))
+        # ksess = '/Sessions/%d' % session_map[sessid]
+        ksess = '/Sessions/%d' % ksession
         pid = get_yakuake(ksess+' processId')
+        # cat /proc/<pid>/environ
         fgpid = get_yakuake(ksess+' foregroundProcessId')
         tabs.append({
             'title': get_yakuake('/yakuake/tabs tabTitle %d' % sessid),
-            'sessionid': sessid,
+            'sessionid': tabid,
+            'tabid': tabid,
             'active': sessid == activesess,
+            'split': split,
             'cwd': get_stdout('pwdx '+pid).partition(' ')[2],
             'cmd': '' if fgpid == pid else get_stdout('ps '+fgpid, env={'PS_FORMAT': 'command'}).split('\n')[-1],
         })
     return tabs
+
 
 def format_sessions(tabs, fp):
     cp = ConfigParser(dict_type=SortedDict)
@@ -84,6 +101,8 @@ def format_sessions(tabs, fp):
         cp.add_section(section)
         cp.set(section, 'title', tab['title'])
         cp.set(section, 'active', 1 if tab['active'] else 0)
+        cp.set(section, 'tab', tab['tabid'])
+        cp.set(section, 'split', tab['split'])
         cp.set(section, 'cwd', tab['cwd'])
         cp.set(section, 'cmd', tab['cmd'])
     cp.write(fp)
@@ -94,6 +113,7 @@ def clear_sessions():
     for ksess in ksessions:
         get_yakuake(ksess+' close')
 
+
 def load_sessions(file):
     cp = ConfigParser(dict_type=SortedDict)
     cp.readfp(file)
@@ -103,25 +123,33 @@ def load_sessions(file):
         sys.exit(1)
 
     # Clear existing sessions, but only if we have good info (above)
-    clear_sessions()
-    for section in sections:
-        get_yakuake('/yakuake/sessions addSession')
-    import time
-    time.sleep(5)
+    # clear_sessions()
+    subprocess.call(['killall', 'yakuake'])
+    subprocess.call(['yakuake'])
+    time.sleep(2)
+    # for section in sections:
+    #     get_yakuake('/yakuake/sessions addSession')
+    # import time
+    # time.sleep(5)
 
     # Map the new sessions to their konsole session objects
-    sessions = sorted(int(i) for i in get_yakuake('/yakuake/sessions sessionIdList').split(','))
-    ksessions = sorted(int(line.split('/')[-1]) for line in get_yakuake('').split('\n') if '/Sessions/' in line)
-    session_map = SortedDict(zip(sessions, ksessions))
+    # sessions = sorted(int(i) for i in get_yakuake('/yakuake/sessions sessionIdList').split(','))
+    # ksessions = sorted(int(line.split('/')[-1]) for line in get_yakuake('').split('\n') if '/Sessions/' in line)
+    # session_map = SortedDict(zip(sessions, ksessions))
 
+    tab = 0
     active = 0
     # Repopulate the tabs
     for i, section in enumerate(sections):
-        sessid = int(get_yakuake('/yakuake/tabs sessionAtTab %d' % i))
-        ksessid = '/Session/%d' % session_map[sessid]
         opts = dict(cp.items(section))
-        get_yakuake('/yakuake/sessions raiseSession %d' % sessid)
-        get_yakuake('/yakuake/tabs setTabTitle %d "%s"' % (sessid, opts['title']))
+        if opts['split'] == 'None':
+            tab += 1
+            get_yakuake('/yakuake/sessions addSession')
+            get_yakuake('/yakuake/tabs setTabTitle %d "%s"' % (tab, opts['title']))
+        else:
+            get_yakuake('/yakuake/sessions org.kde.yakuake.splitTerminalLeftRight %d' % tab)
+        sessid = int(get_yakuake('/yakuake/tabs sessionAtTab %d' % i))
+        # ksessid = '/Session/%d' % session_map[sessid]
         if opts['cwd']:
             get_yakuake('/yakuake/sessions runCommand "cd %s"' % opts['cwd'])
         if opts['cmd']:
@@ -130,6 +158,8 @@ def load_sessions(file):
             active = sessid
     if active:
         get_yakuake('/yakuake/sessions raiseSession %d' % active)
+    # Remove initial session
+    get_yakuake('/yakuake/sessions removeSession 0')
 
 
 if __name__ == '__main__':
