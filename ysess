@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+# coding=utf-8
 
 import subprocess as sp, os, math, sys, re
 import subprocess
@@ -74,6 +75,10 @@ def get_sessions():
     last_tabid = None
 
     for ksession in ksessions:
+        # Está dando la sesión del id en el que se hizo el split, no tiene nada que ver con el tab, pero ayuda.
+        # Por ejemplo, sesión 4->split->sesión 5->split->sesión 6, dará sesión 5 para la sesión 6.
+        # Al usar "sessionAtTab", me devuelve la primera sesión abierta en el tab, lo cual me ayuda a seguir
+        # el orden.
         tabid = int(get_yakuake('/yakuake/sessions sessionIdForTerminalId %d' % (ksession - 1)))
         split = '' if tabid != last_tabid else ('vertical' if ksession % 2 else 'horizontal')
         last_tabid = tabid
