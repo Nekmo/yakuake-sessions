@@ -70,19 +70,16 @@ def get_sessions():
 
     for ksession in ksessions:
         tabid = int(get_yakuake('/yakuake/sessions sessionIdForTerminalId %d' % (ksession - 1)))
-        if tabid == last_tabid:
-            split = 'true'
-        else:
-            split = None
+        split = '' if tabid != last_tabid else ('vertical' if ksession % 2 else 'horizontal')
         last_tabid = tabid
         sessid = int(get_yakuake('/yakuake/tabs sessionAtTab %d' % tabid))
         # ksess = '/Sessions/%d' % session_map[sessid]
         ksess = '/Sessions/%d' % ksession
-        pid = get_yakuake(ksess+' processId')
+        pid = get_yakuake(ksess + ' processId')
         # cat /proc/<pid>/environ
         fgpid = get_yakuake(ksess+' foregroundProcessId')
         tabs.append({
-            'title': get_yakuake('/yakuake/tabs tabTitle %d' % sessid),
+            'title': get_yakuake('/yakuake/tabs tabTitle %d' % tabid),
             'sessionid': tabid,
             'tabid': tabid,
             'active': sessid == activesess,
@@ -142,12 +139,14 @@ def load_sessions(file):
     # Repopulate the tabs
     for i, section in enumerate(sections):
         opts = dict(cp.items(section))
-        if opts['split'] == 'None':
+        if not opts['split']:
             tab += 1
             get_yakuake('/yakuake/sessions addSession')
             get_yakuake('/yakuake/tabs setTabTitle %d "%s"' % (tab, opts['title']))
         else:
-            get_yakuake('/yakuake/sessions org.kde.yakuake.splitTerminalLeftRight %d' % tab)
+            get_yakuake('/yakuake/sessions splitTerminal{} {}'.format({'vertical': 'LeftRight',
+                                                                       'horizontal': 'TopBottom'}[opts['split']],
+                                                                      tab))
         sessid = int(get_yakuake('/yakuake/tabs sessionAtTab %d' % i))
         # ksessid = '/Session/%d' % session_map[sessid]
         if opts['cwd']:
