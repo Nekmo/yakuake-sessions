@@ -7,8 +7,13 @@ from ConfigParser import ConfigParser
 from cStringIO import StringIO
 from optparse import OptionParser
 
+import dbus
+
 DBUS = 'qdbus org.kde.yakuake '
 YAKUAKE_DEFAULT_NEW_SESSIONS_OPENED = 1
+
+bus = dbus.SessionBus()
+
 
 class SortedDict(dict):
     def __init__(self, *args, **kwargs):
@@ -150,9 +155,16 @@ def load_sessions(file):
         sessid = int(get_yakuake('/yakuake/tabs sessionAtTab %d' % i))
         # ksessid = '/Session/%d' % session_map[sessid]
         if opts['cwd']:
-            get_yakuake('/yakuake/sessions runCommand "cd %s"' % opts['cwd'])
+            get_yakuake('/yakuake/sessions runCommand " cd %s"' % opts['cwd'])
         if opts['cmd']:
-            get_yakuake('/yakuake/sessions runCommand "%s"' % opts['cmd'])
+            for cmd in opts['cmd'].split(r'\n'):
+                # get_yakuake('/yakuake/sessions runCommand "%s"' % cmd)
+                dbus_session = bus.get_object('org.kde.yakuake', '/Sessions/{}'.format(i + 1))
+                dbus_session = dbus.Interface(dbus_session, 'org.kde.konsole.Session')
+                dbus_session.sendText(cmd)
+                dbus_session.sendText('\n')
+                # get_stdout('qdbus org.kde.yakuake /Sessions/%d org.kde.konsole.Session.sendText "%s"' % (i+1, cmd))
+                # get_stdout('qdbus org.kde.yakuake /Sessions/{} org.kde.konsole.Session.sendText "\n"'.format(i+1))
         if opts['active'].lower() in ['y', 'yes', 'true', '1']:
             active = sessid
     if active:
