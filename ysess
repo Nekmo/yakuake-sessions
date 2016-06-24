@@ -154,9 +154,10 @@ def load_sessions(file):
             get_yakuake('/yakuake/sessions addSession')
             get_yakuake('/yakuake/tabs setTabTitle %d "%s"' % (tab, opts['title']))
         else:
+            split_target, split = (tab, opts['split']) if ':' not in opts['split'] else opts['split'].split(':')
             get_yakuake('/yakuake/sessions splitTerminal{} {}'.format({'vertical': 'LeftRight',
-                                                                       'horizontal': 'TopBottom'}[opts['split']],
-                                                                      tab))
+                                                                       'horizontal': 'TopBottom'}[split],
+                                                                      int(split_target)))
         sessid = int(get_yakuake('/yakuake/tabs sessionAtTab %d' % i))
         # ksessid = '/Session/%d' % session_map[sessid]
         if opts['cwd']:
